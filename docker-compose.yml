@@ -2,14 +2,15 @@ version: '3'
 
 services:
   firemail:
-    build: .
-    image: luofengyuan/firemail:latest
+    image: iniwex/firemail:latest
     container_name: firemail
+    pull_policy: always
     restart: unless-stopped
     ports:
       - "80:80"  # 只暴露一个端口，通过Nginx进行反向代理
     volumes:
-      - ./backend/data:/app/backend/data
+      - ./data:/app/backend/data
+      - ./logs:/app/logs
     environment:
       - TZ=Asia/Shanghai
       - HOST=0.0.0.0
