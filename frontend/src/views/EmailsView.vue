@@ -54,7 +54,7 @@
             :selectable="row => row"
           />
           <el-table-column prop="email" label="邮箱地址" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="mail_type" label="邮箱类型" min-width="100">
+          <el-table-column prop="mail_type" label="邮箱类型" min-width="140" show-overflow-tooltip>
             <template #default="scope">
               <el-tag
                 :type="getMailTypeColor(scope.row.mail_type || 'outlook')"
@@ -327,8 +327,8 @@
       <el-dialog
         v-model="mailContentDialogVisible"
         :title="selectedMail ? selectedMail.subject : '邮件详情'"
-        width="80%"
-        top="5vh"
+        width="98%"
+        top="2vh"
         class="mail-content-dialog"
       >
         <div v-if="selectedMail" class="mail-detail">
@@ -1265,6 +1265,7 @@ onMounted(() => {
 
 .mail-type-tag {
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .password-field {
@@ -1339,6 +1340,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  height: 88vh;
+  overflow-y: auto;
 }
 
 .mail-info {

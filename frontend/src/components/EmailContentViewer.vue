@@ -85,7 +85,7 @@
     <!-- 邮件内容 -->
     <div class="email-content">
       <!-- 根据邮件类型选择不同的渲染方式 -->
-      <template v-if="isHtmlContent">
+  <template v-if="isHtmlContent">
         <!-- GitHub邮件特殊处理 -->
         <div v-if="isGitHubEmail" class="github-container">
           <div class="github-header">
@@ -95,11 +95,11 @@
             </svg>
             <span class="github-title">GitHub</span>
           </div>
-          <div class="html-content github-email" v-html="sanitizedContent"></div>
+        <iframe class="html-frame github-email" :srcdoc="sanitizedContent" ref="contentFrame" @load="onFrameLoad" style="height:100%"></iframe>
         </div>
         <!-- Microsoft邮件特殊处理 - 移除顶部标题栏，直接显示内容 -->
         <div v-else-if="isMicrosoftEmail" class="microsoft-container-new">
-          <div class="html-content microsoft-email-new" v-html="sanitizedContent"></div>
+        <iframe class="html-frame microsoft-email-new" :srcdoc="sanitizedContent" ref="contentFrame" @load="onFrameLoad" style="height:100%"></iframe>
         </div>
         <!-- Notion邮件特殊处理 -->
         <div v-else-if="isNotionEmail" class="notion-container">
@@ -110,10 +110,10 @@
             </svg>
             <span class="notion-title">Notion</span>
           </div>
-          <div class="html-content notion-email" v-html="sanitizedContent"></div>
+        <iframe class="html-frame notion-email" :srcdoc="sanitizedContent" ref="contentFrame" @load="onFrameLoad" style="height:100%"></iframe>
         </div>
         <!-- 普通HTML邮件 -->
-        <div v-else class="html-content" v-html="sanitizedContent"></div>
+        <iframe v-else class="html-frame" :srcdoc="sanitizedContent" ref="contentFrame" @load="onFrameLoad" style="height:100%"></iframe>
       </template>
       <!-- 纯文本邮件 -->
       <template v-else-if="isPlainText">
@@ -134,7 +134,7 @@
     <el-dialog
       v-model="previewDialogVisible"
       :title="previewingAttachment ? previewingAttachment.filename : '附件预览'"
-      width="70%"
+      width="90%"
       destroy-on-close
     >
       <div v-if="previewingAttachment" class="attachment-preview">
@@ -569,7 +569,7 @@ const sanitizedContent = computed(() => {
       'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li', 'nl', 'ol',
       'p', 'pre', 'span', 'strike', 'strong', 'table', 'tbody', 'td', 'th', 'thead',
       'tr', 'u', 'ul', 'font', 'center', 'style', 'head', 'body', 'html', 'meta',
-      'title', 'link', 'script', 'iframe', 'form', 'input', 'button', 'select', 'option',
+      'title', 'link',
       'section', 'header', 'footer', 'nav', 'main', 'aside', 'figure', 'figcaption',
       'address', 'cite', 'dd', 'dl', 'dt', 'mark', 's', 'small', 'sub', 'sup', 'time',
       'wbr', 'col', 'colgroup', 'source', 'track', 'video', 'audio', 'canvas', 'map',
@@ -594,21 +594,55 @@ const sanitizedContent = computed(() => {
     SANITIZE_DOM: true,
     KEEP_CONTENT: true
   });
-
-  // 根据邮件类型进行特殊处理
-  if (isGitHubEmail.value) {
-    // 修复GitHub邮件中的样式问题
-    return fixGitHubEmailStyles(cleanHtml);
-  } else if (isMicrosoftEmail.value) {
-    // 专门处理微软邮件的样式问题
-    return fixMicrosoftEmailStyles(cleanHtml);
-  } else if (isNotionEmail.value) {
-    // 修复Notion邮件中的样式问题
-    return fixGitHubEmailStyles(cleanHtml); // 暂时复用GitHub的处理函数
+  let html = cleanHtml
+  if (!isGitHubEmail.value && !isMicrosoftEmail.value && !isNotionEmail.value) {
+    html = cleanHtml.replace(/<img\s/gi, '<img loading="eager" ')
   }
-
-  return cleanHtml;
+  const bootstrap = `
+    <style>
+      html, body { margin:0; padding:0; overflow:hidden !important; }
+      body { width:100% !important; max-width:100% !important; }
+      table, .container, .wrapper, .content { width:100% !important; max-width:100% !important; }
+      img { max-width:100% !important; height:auto !important; }
+    </style>
+    <script>(function(){
+      function apply(){
+        try {
+          var els = document.querySelectorAll('table[width], table[style*="width"], [class*="container"], [class*="wrapper"], [class*="content"]');
+          els.forEach(function(el){ el.style.width='100%'; el.style.maxWidth='100%'; el.removeAttribute('width'); });
+          var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+          parent.postMessage({ type:'email-frame-resize', height: h }, '*');
+        } catch(e) {}
+      }
+      document.addEventListener('DOMContentLoaded', function(){ apply(); setTimeout(apply, 500); setTimeout(apply, 1500); setTimeout(apply, 3000); });
+    })();<\/script>
+  `
+  return html + bootstrap;
 })
+
+const contentFrame = ref(null)
+
+const updateFrameHeight = () => {
+  const f = contentFrame.value
+  if (f && f.contentWindow && f.contentWindow.document) {
+    const doc = f.contentWindow.document
+    const h = Math.max(
+      doc.body.scrollHeight,
+      doc.documentElement.scrollHeight,
+      doc.body.offsetHeight,
+      doc.documentElement.offsetHeight
+    )
+    const viewport = Math.max(window.innerHeight || 0, 700)
+    f.style.height = `${Math.max(h, viewport * 0.9)}px`
+  }
+}
+
+const onFrameLoad = () => {
+  updateFrameHeight()
+  setTimeout(updateFrameHeight, 500)
+  setTimeout(updateFrameHeight, 1500)
+  setTimeout(updateFrameHeight, 3000)
+}
 
 const hasAttachments = computed(() => {
   return props.mail && props.mail.has_attachments && props.attachments && props.attachments.length > 0
@@ -1271,12 +1305,21 @@ const downloadOriginalEmail = () => {
 onMounted(() => {
   // 初始加载时修复垂直文本
   fixVerticalText()
+  setTimeout(updateFrameHeight, 300)
+  window.addEventListener('message', (e) => {
+    if (e && e.data && e.data.type === 'email-frame-resize' && contentFrame.value) {
+      const target = contentFrame.value
+      const newHeight = Math.max(e.data.height || 0, Math.floor((window.innerHeight || 800) * 0.9))
+      target.style.height = newHeight + 'px'
+    }
+  })
 })
 
 // 监听邮件内容变化
 watch(() => props.mail, () => {
   // 邮件内容变化时重新修复垂直文本
   fixVerticalText()
+  setTimeout(updateFrameHeight, 300)
 }, { deep: true })
 </script>
 
@@ -1414,7 +1457,7 @@ watch(() => props.mail, () => {
   padding: 0 24px;
   overflow: auto;
   width: 100%;
-  max-width: 900px; /* 增加最大宽度，提高可读性 */
+  max-width: 100%;
   margin: 0 auto;
   background-color: #ffffff;
   box-sizing: border-box;
@@ -1457,14 +1500,7 @@ watch(() => props.mail, () => {
 
 /* 表格样式优化 - 更简洁的表格样式 */
 .html-content :deep(table) {
-  border-collapse: collapse;
-  margin: 20px auto;
-  width: 100%;
   max-width: 100%;
-  table-layout: auto;
-  border: none;
-  border-radius: 0;
-  overflow: hidden;
 }
 
 /* 使表格在小屏幕上可滚动，但在大屏幕上正常显示 */
@@ -1481,7 +1517,7 @@ watch(() => props.mail, () => {
   .html-content :deep(table) {
     display: table;
     white-space: normal;
-    table-layout: fixed; /* 固定表格布局，防止内容撑开 */
+    table-layout: auto;
   }
 
   /* 强制表格单元格自动换行 */
@@ -1492,22 +1528,11 @@ watch(() => props.mail, () => {
 }
 
 .html-content :deep(th) {
-  background-color: #f8f9fa;
-  font-weight: 600;
-  text-align: left;
-  padding: 12px 16px;
-  border: none;
-  border-bottom: 1px solid #ebeef5;
   white-space: normal;
   word-break: break-word;
-  color: #303133;
 }
 
 .html-content :deep(td) {
-  padding: 12px 16px;
-  border: none;
-  border-bottom: 1px solid #f0f0f0;
-  min-width: 60px;
   white-space: normal;
   word-break: break-word;
 }
@@ -2513,3 +2538,39 @@ watch(() => props.mail, () => {
   }
 }
 </style>
+.html-frame {
+  width: 100%;
+  border: 0;
+  background: transparent;
+}
+.html-frame {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: block;
+  height: 100%;
+}
+const contentFrame = ref(null)
+
+const updateFrameHeight = () => {
+  const f = contentFrame.value
+  if (f && f.contentWindow && f.contentWindow.document) {
+    const doc = f.contentWindow.document
+    const h = Math.max(
+      doc.body.scrollHeight,
+      doc.documentElement.scrollHeight,
+      doc.body.offsetHeight,
+      doc.documentElement.offsetHeight
+    )
+    const viewport = Math.max(window.innerHeight || 0, 700)
+    f.style.height = `${Math.max(h, viewport * 0.9)}px`
+  }
+}
+
+const onFrameLoad = () => {
+  updateFrameHeight()
+  // 图片加载完成后再调整一次
+  setTimeout(updateFrameHeight, 500)
+  setTimeout(updateFrameHeight, 1500)
+  setTimeout(updateFrameHeight, 3000)
+}

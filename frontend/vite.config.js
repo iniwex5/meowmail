@@ -15,6 +15,16 @@ export default defineConfig({
   },
   server: {
     cors: true,
-    port
+    port,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true
+      },
+      '/ws': {
+        target: 'ws://127.0.0.1:8765',
+        ws: true
+      }
+    }
   }
 })

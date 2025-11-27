@@ -43,6 +43,10 @@ class Database:
                             # 表存在但没有用户，需要初始化
                             logger.info("数据库表结构存在但没有用户数据，执行初始化")
                             cls._instance.init_db()
+                        else:
+                            # 即使已有数据，也执行一次轻量级迁移以补充新列
+                            logger.info("检测并应用数据库轻量级迁移")
+                            cls._instance.migrate_schema()
                     else:
                         # 表不存在，需要初始化
                         logger.info("数据库文件存在但缺少必要表结构，执行初始化")
@@ -164,6 +168,23 @@ class Database:
         except Exception as e:
             logger.error(f"初始化数据库表结构失败: {str(e)}")
             traceback.print_exc()
+
+    def migrate_schema(self):
+        """对已有数据库执行轻量级迁移，补充缺失列"""
+        try:
+            # 保障关键列存在（幂等）
+            self._check_and_add_column('emails', 'enable_realtime_check', 'INTEGER DEFAULT 0')
+            self._check_and_add_column('users', 'password_hash', 'TEXT NOT NULL')
+            # 规范现有数据的默认值
+            try:
+                self.conn.execute("UPDATE emails SET enable_realtime_check = 0 WHERE enable_realtime_check IS NULL")
+                self.conn.commit()
+            except Exception:
+                pass
+            # 可在此扩展更多迁移项
+            logger.info("轻量级迁移完成")
+        except Exception as e:
+            logger.error(f"执行轻量级迁移失败: {str(e)}")
 
     def _check_and_add_column(self, table, column, type_def):
         """检查表中是否存在某列，如果不存在则添加"""

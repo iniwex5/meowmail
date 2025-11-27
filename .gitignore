@@ -55,3 +55,4 @@ pnpm-debug.log*
 backend/data/*.db 
 logs/*
 FireMail.log
+.trae/*
