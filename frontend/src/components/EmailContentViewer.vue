@@ -112,8 +112,9 @@
           </div>
         <iframe class="html-frame notion-email" :srcdoc="sanitizedContent" ref="contentFrame" @load="onFrameLoad" style="height:100%"></iframe>
         </div>
-        <!-- 普通HTML邮件 -->
-        <iframe v-else class="html-frame" :srcdoc="sanitizedContent" ref="contentFrame" @load="onFrameLoad" style="height:100%"></iframe>
+        <div v-else class="default-container">
+          <iframe class="html-frame default-email" :srcdoc="sanitizedContent" ref="contentFrame" @load="onFrameLoad"></iframe>
+        </div>
       </template>
       <!-- 纯文本邮件 -->
       <template v-else-if="isPlainText">
@@ -600,17 +601,36 @@ const sanitizedContent = computed(() => {
   }
   const bootstrap = `
     <style>
-      html, body { margin:0; padding:0; overflow:hidden !important; }
-      body { width:100% !important; max-width:100% !important; }
-      table, .container, .wrapper, .content { width:100% !important; max-width:100% !important; }
+      html, body { margin:0; padding:0; overflow-x:hidden !important; }
+      body, .root, .main { width:100% !important; max-width:100% !important; }
+      table, td, th, center, .container, .wrapper, .content { width:100% !important; max-width:100% !important; }
       img { max-width:100% !important; height:auto !important; }
     </style>
     <script>(function(){
       function apply(){
         try {
-          var els = document.querySelectorAll('table[width], table[style*="width"], [class*="container"], [class*="wrapper"], [class*="content"]');
-          els.forEach(function(el){ el.style.width='100%'; el.style.maxWidth='100%'; el.removeAttribute('width'); });
-          var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+          var selectors = [
+            'table[width]', 'table[style*="width"]',
+            'td[width]', 'th[width]', 'td[style*="width"]', 'th[style*="width"]',
+            'div[width]', 'div[style*="width"]',
+            'center > table',
+            '[style*="max-width"]', '[style*="min-width"]'
+          ];
+          var els = document.querySelectorAll(selectors.join(','));
+          els.forEach(function(el){
+            el.style.width = '100%';
+            el.style.maxWidth = '100%';
+            if (el.hasAttribute('width')) el.removeAttribute('width');
+            if (el.style && el.style.minWidth && parseInt(el.style.minWidth) < 200) el.style.minWidth = '200px';
+            if (el.style && el.style.marginLeft) el.style.marginLeft = '0';
+            if (el.style && el.style.marginRight) el.style.marginRight = '0';
+          });
+          var h = Math.max(
+            document.body.scrollHeight,
+            document.documentElement.scrollHeight,
+            document.body.offsetHeight,
+            document.documentElement.offsetHeight
+          );
           parent.postMessage({ type:'email-frame-resize', height: h }, '*');
         } catch(e) {}
       }
@@ -1324,6 +1344,24 @@ watch(() => props.mail, () => {
 </script>
 
 <style scoped>
+.html-frame {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: block;
+}
+
+.default-container {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.default-email {
+  background-color: #ffffff;
+}
 .email-content-viewer {
   display: flex;
   flex-direction: column;
@@ -2401,7 +2439,7 @@ watch(() => props.mail, () => {
     flex: 1;
   }
 
-  .github-container, .microsoft-container, .notion-container, .microsoft-container-new {
+  .github-container, .microsoft-container, .notion-container, .microsoft-container-new, .default-container {
     max-width: 100%;
   }
 
@@ -2538,39 +2576,3 @@ watch(() => props.mail, () => {
   }
 }
 </style>
-.html-frame {
-  width: 100%;
-  border: 0;
-  background: transparent;
-}
-.html-frame {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  display: block;
-  height: 100%;
-}
-const contentFrame = ref(null)
-
-const updateFrameHeight = () => {
-  const f = contentFrame.value
-  if (f && f.contentWindow && f.contentWindow.document) {
-    const doc = f.contentWindow.document
-    const h = Math.max(
-      doc.body.scrollHeight,
-      doc.documentElement.scrollHeight,
-      doc.body.offsetHeight,
-      doc.documentElement.offsetHeight
-    )
-    const viewport = Math.max(window.innerHeight || 0, 700)
-    f.style.height = `${Math.max(h, viewport * 0.9)}px`
-  }
-}
-
-const onFrameLoad = () => {
-  updateFrameHeight()
-  // 图片加载完成后再调整一次
-  setTimeout(updateFrameHeight, 500)
-  setTimeout(updateFrameHeight, 1500)
-  setTimeout(updateFrameHeight, 3000)
-}
