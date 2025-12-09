@@ -2,7 +2,7 @@ version: '3'
 
 services:
   firemail:
-    image: iniwex/firemail:latest
+    build: .
     container_name: firemail
     pull_policy: always
     restart: unless-stopped
